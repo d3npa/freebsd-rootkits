@@ -9,37 +9,41 @@
 #include <sys/sysctl.h>
 
 #include <netinet/in.h>
-#include <netinet/ip.h> // これまだ紐づけあるかも
-#include <netinet/ip_var.h> // ip_protox はここ！！
-#include <netinet/udp.h> 		// 中にstruct udphdrの定義ある
-#include <netinet/udp_var.h> // udp_input プロトタイプ
+#include <netinet/ip_var.h> 	// ip_protox
+#include <netinet/udp.h> 		// struct udphdr
+#include <netinet/udp_var.h> 	// udp_inputのプロトタイプ
 
-// ip_protoxってどこで定義されるんだっけ
+#define TRIGGER "Shiny."
 
 extern struct protosw inetsw[];
-int udp_input_hook(struct mbuf **, int *, int);
 
-int
+static int
 udp_input_hook(struct mbuf **mp, int *offp, int proto)
 {
 	/*
 		mbufの構成:
 		[ struct ip ] [ struct udphdr ] [ data ]
 		              ↑ *offp
-
-		つまりdataを取得するには*offpにstruct udphdrの長さを足せばいいです。
 	*/
 
 	int iphlen = *offp;
 	int uhlen = sizeof(struct udphdr);
 
 	struct mbuf *mb = *mp;
+
+	if (mb->m_len < iphlen + sizeof(struct udphdr)) {
+		if ((mb = m_pullup(mb, iphlen + sizeof(struct udphdr))) == NULL) {
+			// これは例外です。udp_inputに任せましょう。
+			return udp_input(mp, offp, proto);
+		}
+	}
+
 	struct ip *ip = mtod(mb, struct ip *);
 	struct udphdr *uh = (struct udphdr *) ((caddr_t) ip + iphlen);
 	char *data = (char *) ((caddr_t) uh + uhlen);
 
-	if (ntohs(uh->uh_dport) == 5000)
-		printf("User Data: %s\n", data);
+	if (ntohs(uh->uh_dport) == 5000 && strncmp(data, TRIGGER, 6) == 0)
+		printf("Hack the planet!\n");
 
 	return udp_input(mp, offp, proto);
 }
