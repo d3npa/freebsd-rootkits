@@ -7,21 +7,23 @@
 #include <sys/uio.h>
 
 #define BUFSIZE 0x100
-char buffer[BUFSIZE];
+char buffer[BUFSIZE+1];
 
 d_open_t 	open;
 d_close_t 	close;
 d_read_t	read;
+d_write_t	write;
 
 static struct cdevsw cd_example_cdevsw = {
 	.d_version = 	D_VERSION,
 	.d_name = 	"cd_example",
 	.d_open = 	open,
 	.d_close = 	close,
-	.d_read = 	read
+	.d_read = 	read,
+	.d_write = 	write
 };
 
-int 
+int
 open(struct cdev *dev, int oflags, int devtype, struct thread *td)
 {
 	return 0;
@@ -35,7 +37,15 @@ close(struct cdev *dev, int fflag, int devtype, struct thread *td)
 
 int
 read(struct cdev *dev, struct uio *uio, int ioflag)
-{ 
+{
+	uiomove_frombuf(buffer, BUFSIZE, uio);
+	return 0;
+}
+
+int
+write(struct cdev *dev, struct uio *uio, int ioflag)
+{
+	memset(buffer, 0, BUFSIZE+1);
 	uiomove_frombuf(buffer, BUFSIZE, uio);
 	return 0;
 }
@@ -56,7 +66,6 @@ load(struct module *module, int cmd, void *arg)
 			args.mda_uid = args.mda_gid = 0;
 			args.mda_mode = 0600;
 			make_dev_s(&args, &dev, "cd_example");
-			copystr("Hello, world!\n", buffer, BUFSIZE, NULL);
 			break;
 		case MOD_UNLOAD:
 			destroy_dev(dev);
