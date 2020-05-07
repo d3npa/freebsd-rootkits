@@ -22,9 +22,11 @@ static int load(struct module *module, int cmd, void *arg)
 
 	switch(cmd) {
 	case MOD_LOAD:
+		printf("Loaded annoying_hello at offset %d\n", offset);
 		uprintf("Loaded annoying_hello at offset %d\n", offset);
 		break;
 	case MOD_UNLOAD:
+		printf("Unloaded annoying_hello\n");
 		uprintf("Unloaded annoying_hello\n");
 		break;
 	default:
