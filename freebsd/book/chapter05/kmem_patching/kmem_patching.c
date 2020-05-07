@@ -24,15 +24,15 @@ int main(void)
 	unsigned char annoying_hello_code[SIZE];
 
 	if ((kd = kvm_open(NULL, NULL, NULL, O_RDWR, errbuf)) == NULL) {
-		fprintf(stderr, "\003[91mERROR: %s\033[0m\n", errbuf);
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", errbuf);
 		exit(-1);
 	}
 
 	nl[0].n_name = "annoying_hello";
 
-	if (kvm_nlist(kd, nl) == -1) {
+	if (kvm_nlist(kd, nl) != 0) {
 		fprintf(stderr,
-			"\003[91mERROR: Symbol %s not found\033[0m\n", nl[0].n_name);
+			"\033[91mERROR: Symbol %s not found\033[0m\n", nl[0].n_name);
 		exit(-1);
 	}
 
@@ -41,8 +41,8 @@ int main(void)
 
 	if (kvm_read(kd, nl[0].n_value, annoying_hello_code, SIZE) == -1) {
 		fprintf(stderr,
-			"\003[91mERROR: %s\033[0m\n", kvm_geterr(kd));
-		exit(0);
+			"\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		exit(-1);
 	}
 
 	/* cmp命令を探索する */
@@ -53,15 +53,28 @@ int main(void)
 		}
 	}
 
+	if (offset >= SIZE) {
+		fprintf(stderr, "\033[93m[-] Unable to locate target instruction. "
+			"Perhaps it was already overwritten?\033[0m\n");
+		exit(0);
+	}
 
 	/* コードをパッチしてカーネルに書き込む */
-	annoying_hello_code[offset] = (annoying_hello_code[offset] == 0xa) ? 0x1 : 0xa;
+	annoying_hello_code[offset] = 0x1;
+	if (kvm_write(kd, nl[0].n_value, annoying_hello_code, SIZE) == -1) {
+		fprintf(stderr,
+			"\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		exit(-1);
+	}
 
-	printf("\033[92m[+] Dumping code of annoying_hello\033[0m\n");
-	write(1, annoying_hello_code, SIZE);
+	printf("\033[92m[+] Patched function %s at %p\033[0m\n",
+				nl[0].n_name, (void *)nl[0].n_value);
 
+	if (kvm_close(kd) == -1) {
+		fprintf(stderr,
+			"\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		exit(-1);
+	}
 
-	kvm_close(kd);
-
-	return 0;
+	exit(0);
 }
