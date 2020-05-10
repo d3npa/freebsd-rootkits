@@ -15,14 +15,15 @@ struct kmalloc_args {
 
 static int kmalloc_handler(struct thread *td, void *arg)
 {
+	int error;
 	void *ptr;
 	struct kmalloc_args *uap;
 	uap = (struct kmalloc_args *)arg;
 
 	ptr = malloc(uap->size, M_TEMP, M_ZERO | M_WAITOK);
-	copyout(&ptr, uap->ptr, sizeof(void *));
+	error = copyout(&ptr, uap->ptr, sizeof(void *));
 
-	return 0;
+	return error;
 }
 
 static int offset = NO_SYSCALL;
