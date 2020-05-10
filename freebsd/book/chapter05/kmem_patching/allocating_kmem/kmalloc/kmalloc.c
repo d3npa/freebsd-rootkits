@@ -3,20 +3,24 @@
 #include <sys/proc.h>
 #include <sys/module.h>
 #include <sys/sysent.h>
+#include <sys/types.h>
+#include <sys/malloc.h>
 
 #include <bsm/audit_kevents.h>
 
 struct kmalloc_args {
-	void *ptr;
 	size_t size;
+	void *ptr;
 };
 
 static int kmalloc_handler(struct thread *td, void *arg)
 {
+	void *ptr;
 	struct kmalloc_args *uap;
 	uap = (struct kmalloc_args *)arg;
 
-	uprintf("Pointer: %p\nSize: %zu\n", uap->ptr, uap->size);
+	ptr = malloc(uap->size, M_TEMP, M_ZERO | M_WAITOK);
+	copyout(&ptr, uap->ptr, sizeof(void *));
 
 	return 0;
 }
