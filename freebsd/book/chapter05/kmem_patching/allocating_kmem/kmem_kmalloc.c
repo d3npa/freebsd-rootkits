@@ -1,8 +1,10 @@
 #include <fcntl.h>
 #include <kvm.h>
 #include <limits.h>
+#include <nlist.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 unsigned char kmalloc[] =
 	"\x55"                            /* push   rbp                       */
@@ -24,14 +26,18 @@ unsigned char kmalloc[] =
 	"\x5d"                            /* pop    rbp                       */
 	"\xc3";                           /* ret                              */
 
+#define CODE_SIZE sizeof(kmalloc)
 #define OFF_SYM_M_WAIT  0x0c + 3
 #define OFF_SYM_MALLOC  0x18 + 1
 #define OFF_SYM_COPYOUT 0x28 + 1
 
 int main(int argc, char **argv)
 {
+	int error;
 	kvm_t *kd;
 	char errbuf[_POSIX2_LINE_MAX];
+	struct nlist nl[] = { { NULL }, { NULL }, { NULL }, { NULL }, { NULL }};
+	unsigned char backup[CODE_SIZE];
 
 	/*
 		open kernel
@@ -43,10 +49,44 @@ int main(int argc, char **argv)
 		close all
 	*/
 
+	/* カーネルメモリの記述子を取得する */
 	if ((kd = kvm_openfiles(NULL, NULL, NULL, O_RDWR, errbuf)) == NULL) {
-		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", "Unable to open kmem device");
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
+					"Unable to open kmem device");
 		exit(-1);
 	};
+
+	/* シンボル解決 */
+	nl[0].n_name = "sys_mkdir";
+	nl[1].n_name = "M_TEMP";
+	nl[2].n_name = "malloc";
+	nl[3].n_name = "copyout";
+
+	error = kvm_nlist(kd, nl);
+	for (int i = 0; i < sizeof(nl) / sizeof(*nl) - 1; i++) {
+		fprintf(stderr, "\033[94mDEBUG: [%p] %s\033[0m\n",
+					(void *) nl[i].n_value, nl[i].n_name);
+	}
+	if (error != 0) {
+		if (error == -1)
+			fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
+					"Unable to read kernel symbol table");
+		else
+			fprintf(stderr,
+	"\033[91mERROR: %d symbol(s) could not be resolved\033[0m\n",
+				error);
+		kvm_close(kd);
+		exit(-1);
+	}
+
+	/* sys_mkdirの読み込み・バックアップ */
+	if ((kvm_read(kd, nl[0].n_value, backup, CODE_SIZE)) == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		kvm_close(kd);
+		exit(-1);
+	}
+
+	write(1, backup, CODE_SIZE);
 
 	kvm_close(kd);
 
