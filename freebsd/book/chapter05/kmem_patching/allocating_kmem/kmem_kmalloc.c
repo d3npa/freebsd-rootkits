@@ -1,9 +1,9 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <kvm.h>
 #include <limits.h>
 #include <nlist.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 
 #include <sys/syscall.h>
@@ -33,7 +33,46 @@
 
 	EFAULT "Bad address" is raised by write(2)
 	[EFAULT]        Part of iov or data to be written to the file points
-                        outside the process's allocated address space.
+                        outside the process's allocated address space.\
+
+	Whoever controls kd->vmfd (so the driver for /dev/kmem)
+	Is telling us we can't write there...
+
+
+	NOTES:
+		/dev/mem
+		/dev/kmem driven by
+		https://github.com/freebsd/freebsd/blob/master/sys/dev/mem/memdev.c
+
+		.d_read =	memrw,
+		.d_write =	memrw,
+	 	memrw from
+		https://github.com/freebsd/freebsd/blob/master/sys/amd64/amd64/mem.c
+
+		if (!kernacc((void *)v, c, uio->uio_rw == UIO_READ ?
+			VM_PROT_READ : VM_PROT_WRITE)) {
+			error = EFAULT;
+			break;
+		}
+
+		kernacc from
+		https://github.com/freebsd/freebsd/blob/master/sys/vm/vm_glue.c#L118
+
+		vm_map_entry!!! Maybe the kernel memory is `ro` and this code checks that!
+		
+
+
+	BUG??
+	Unable to kvm_open with O_WRONLY (bad flags arg)
+	// kvm.c
+	if (flag & ~O_RDWR) {
+	       _kvm_err(kd, kd->program, "bad flags arg");
+	       goto failed;
+       	}
+
+
+	Whoever controls
+
 */
 
 
@@ -71,8 +110,9 @@ int main(int argc, char **argv)
 	unsigned char backup[CODE_SIZE];
 	void *heap_addr;
 
+	printf("%x %x %x\n", O_RDONLY, O_WRONLY, O_RDWR);
 	/* カーネルメモリの記述子を取得する */
-	if ((kd = kvm_openfiles(NULL, NULL, NULL, O_RDWR, errbuf)) == NULL) {
+	if ((kd = kvm_open("/dev/kmem", NULL, NULL, O_RDWR, errbuf)) == NULL) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to open kmem device");
 		exit(-1);
@@ -107,6 +147,16 @@ int main(int argc, char **argv)
 		kvm_close(kd);
 		exit(-1);
 	}
+	write(1, backup, CODE_SIZE);
+
+	if ((kvm_write(kd, nl[0].n_value, backup, CODE_SIZE)) == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		fprintf(stderr, "Failed to restore SYS_mkdir this is bad!!\n");
+		kvm_close(kd);
+		exit(-1);
+	}
+	return 0;
+
 
 	/* 相対ジャンプ(call)の引数を解決する */
 	*(unsigned int *)(kmalloc + OFF_SYM_M_WAIT) =
@@ -120,7 +170,7 @@ int main(int argc, char **argv)
 		sizeof(unsigned int));
 
 	/* kmallocの命令でsys_mkdirを上書きする */
-	printf("Writing 0x%lx bytes to %p\n", CODE_SIZE, (void *) nl[0].n_value);
+	// printf("Writing 0x%lx bytes to %p\n", 1, (void *) nl[0].n_value);
 	// if ((kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE)) == -1) {
 	// 	fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
 	// 	kvm_close(kd);
@@ -129,9 +179,10 @@ int main(int argc, char **argv)
 
 	/* kmallocを呼び出す！ */
 	// syscall(211, (size_t) 128, heap_addr);
-
+	write(1, backup, CODE_SIZE);
+	return 0;
 	/* 早速sys_mkdirをリストアする */
-	if ((kvm_write(kd, nl[0].n_value, backup, CODE_SIZE)) == -1) {
+	if ((kvm_write(kd, nl[0].n_value, "0", 1)) == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
 		fprintf(stderr, "Failed to restore SYS_mkdir this is bad!!\n");
 		kvm_close(kd);
@@ -140,7 +191,6 @@ int main(int argc, char **argv)
 
 	// printf("\033[92mGot pointer to kernel chunk: %p\033[0m\n", heap_addr);
 
-	// write(1, kmalloc, CODE_SIZE);
 	kvm_close(kd);
 
 	return 0;
