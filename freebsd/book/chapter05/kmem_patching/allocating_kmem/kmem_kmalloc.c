@@ -59,8 +59,6 @@
 		https://github.com/freebsd/freebsd/blob/master/sys/vm/vm_glue.c#L118
 
 		vm_map_entry!!! Maybe the kernel memory is `ro` and this code checks that!
-		
-
 
 	BUG??
 	Unable to kvm_open with O_WRONLY (bad flags arg)
@@ -69,9 +67,6 @@
 	       _kvm_err(kd, kd->program, "bad flags arg");
 	       goto failed;
        	}
-
-
-	Whoever controls
 
 */
 
@@ -110,9 +105,8 @@ int main(int argc, char **argv)
 	unsigned char backup[CODE_SIZE];
 	void *heap_addr;
 
-	printf("%x %x %x\n", O_RDONLY, O_WRONLY, O_RDWR);
 	/* カーネルメモリの記述子を取得する */
-	if ((kd = kvm_open("/dev/kmem", NULL, NULL, O_RDWR, errbuf)) == NULL) {
+	if ((kd = kvm_open(NULL, NULL, NULL, O_RDWR, errbuf)) == NULL) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to open kmem device");
 		exit(-1);
@@ -147,7 +141,7 @@ int main(int argc, char **argv)
 		kvm_close(kd);
 		exit(-1);
 	}
-	write(1, backup, CODE_SIZE);
+	// write(1, backup, CODE_SIZE);
 
 	if ((kvm_write(kd, nl[0].n_value, backup, CODE_SIZE)) == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
