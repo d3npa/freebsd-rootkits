@@ -8,6 +8,35 @@
 
 #include <sys/syscall.h>
 
+/*
+
+
+	Able to read any address, including SYS_mkdir
+	Able to write to address in any LKM
+	NOT ABLE to write to address in base system, like sys_mkdir or malloc
+
+
+
+
+                errno = 0;
+                if (lseek(kd->vmfd, (off_t)kva, 0) == -1 && errno != 0) {
+                        _kvm_err(kd, 0, "invalid address (%lx)", kva);
+                        return (-1);
+                }
+                cc = write(kd->vmfd, buf, len);
+                if (cc < 0) {
+                        _kvm_syserr(kd, 0, "kvm_write");
+                        return (-1);
+                } else if ((size_t)cc < len)
+                        _kvm_err(kd, kd->program, "short write");
+                return (cc);
+
+	EFAULT "Bad address" is raised by write(2)
+	[EFAULT]        Part of iov or data to be written to the file points
+                        outside the process's allocated address space.
+*/
+
+
 unsigned char kmalloc[] =
 	"\x55"                            /* push   rbp                       */
 	"\x48\x89\xe5"                    /* mov    rbp,rsp                   */
@@ -41,16 +70,6 @@ int main(int argc, char **argv)
 	struct nlist nl[] = { { NULL }, { NULL }, { NULL }, { NULL }, { NULL }};
 	unsigned char backup[CODE_SIZE];
 	void *heap_addr;
-
-	/*
-		open kernel
-		find mkdir, and symbols needed for kmalloc
-		patch kmalloc code
-		swap mkdir code
-		syscall
-		fix mkdir
-		close all
-	*/
 
 	/* カーネルメモリの記述子を取得する */
 	if ((kd = kvm_openfiles(NULL, NULL, NULL, O_RDWR, errbuf)) == NULL) {
@@ -101,14 +120,15 @@ int main(int argc, char **argv)
 		sizeof(unsigned int));
 
 	/* kmallocの命令でsys_mkdirを上書きする */
-	if ((kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE)) == -1) {
-		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
-		kvm_close(kd);
-		exit(-1);
-	}
+	printf("Writing 0x%lx bytes to %p\n", CODE_SIZE, (void *) nl[0].n_value);
+	// if ((kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE)) == -1) {
+	// 	fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+	// 	kvm_close(kd);
+	// 	exit(-1);
+	// }
 
 	/* kmallocを呼び出す！ */
-	syscall(SYS_mkdir, (size_t) 128, heap_addr);
+	// syscall(211, (size_t) 128, heap_addr);
 
 	/* 早速sys_mkdirをリストアする */
 	if ((kvm_write(kd, nl[0].n_value, backup, CODE_SIZE)) == -1) {
@@ -118,7 +138,7 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	printf("\033[92mGot pointer to kernel chunk: %p\033[0m\n", heap_addr);
+	// printf("\033[92mGot pointer to kernel chunk: %p\033[0m\n", heap_addr);
 
 	// write(1, kmalloc, CODE_SIZE);
 	kvm_close(kd);
