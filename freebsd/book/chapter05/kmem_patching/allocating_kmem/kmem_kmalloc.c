@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <sys/syscall.h>
+
 unsigned char kmalloc[] =
 	"\x55"                            /* push   rbp                       */
 	"\x48\x89\xe5"                    /* mov    rbp,rsp                   */
@@ -29,7 +31,7 @@ unsigned char kmalloc[] =
 #define CODE_SIZE sizeof(kmalloc)
 #define OFF_SYM_M_WAIT  0x0c + 3
 #define OFF_SYM_MALLOC  0x18 + 1
-#define OFF_SYM_COPYOUT 0x28 + 1
+#define OFF_SYM_COPYOUT 0x2e + 1
 
 int main(int argc, char **argv)
 {
@@ -38,6 +40,7 @@ int main(int argc, char **argv)
 	char errbuf[_POSIX2_LINE_MAX];
 	struct nlist nl[] = { { NULL }, { NULL }, { NULL }, { NULL }, { NULL }};
 	unsigned char backup[CODE_SIZE];
+	void *heap_addr;
 
 	/*
 		open kernel
@@ -86,8 +89,38 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-	write(1, backup, CODE_SIZE);
+	/* 相対ジャンプ(call)の引数を解決する */
+	*(unsigned int *)(kmalloc + OFF_SYM_M_WAIT) =
+		nl[1].n_value - (nl[0].n_value + OFF_SYM_M_WAIT +
+		sizeof(unsigned int));
+	*(unsigned int *)(kmalloc + OFF_SYM_MALLOC) =
+		nl[2].n_value - (nl[0].n_value + OFF_SYM_MALLOC +
+		sizeof(unsigned int));
+	*(unsigned int *)(kmalloc + OFF_SYM_COPYOUT) =
+		nl[3].n_value - (nl[0].n_value + OFF_SYM_COPYOUT +
+		sizeof(unsigned int));
 
+	/* kmallocの命令でsys_mkdirを上書きする */
+	if ((kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE)) == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		kvm_close(kd);
+		exit(-1);
+	}
+
+	/* kmallocを呼び出す！ */
+	syscall(SYS_mkdir, (size_t) 128, heap_addr);
+
+	/* 早速sys_mkdirをリストアする */
+	if ((kvm_write(kd, nl[0].n_value, backup, CODE_SIZE)) == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n", kvm_geterr(kd));
+		fprintf(stderr, "Failed to restore SYS_mkdir this is bad!!\n");
+		kvm_close(kd);
+		exit(-1);
+	}
+
+	printf("\033[92mGot pointer to kernel chunk: %p\033[0m\n", heap_addr);
+
+	// write(1, kmalloc, CODE_SIZE);
 	kvm_close(kd);
 
 	return 0;
