@@ -11,13 +11,13 @@ int main()
 	struct module_stat stat;
 
 	stat.version = sizeof(stat);
-	modstat(modfind("kmalloc.ko"), &stat);
+	modstat(modfind("kmalloc"), &stat);
 	syscall_num = stat.data.intval;
 
 	/*
 	 * 何故かどうしてもmodfindはモジュールを見つけれない (-1を返す)
 	 */
-	syscall_num = 211;
+	syscall_num = 210;
 
 	printf("Calling syscall %d\n", syscall_num);
 	syscall(syscall_num, (size_t) 128, &addr);
