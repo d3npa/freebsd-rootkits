@@ -34,12 +34,33 @@ int main(int argc, char **argv)
 {
 	kvm_t *kd;
 	char errbuf[_POSIX2_LINE_MAX];
+	struct nlist nl[] = {{NULL}, {NULL}};
+	int i, error;
 
 	printf("\033[95mkmalloc via kmem patching\033[0m\n");
 
-	if ((kd = kvm_openfiles(PATH_KMEM, NULL, NULL, O_RDWR, errbuf)) == NULL) {
-		printf("\033[91mERROR: Cannot open %s\033[0m\n", PATH_KMEM);
+	/* kmemの記述子を取得する */
+	kd = kvm_openfiles(PATH_KMEM, NULL, NULL, O_RDWR, errbuf);
+	if (kd == NULL) {
+		fprintf(stderr,
+			"\033[91mERROR: Cannot open %s\033[0m\n", PATH_KMEM);
 		exit(-1);
+	}
+
+	nl[0].n_name = "sys_mkdir";
+
+	/* シンボルの位置を取得する */
+	error = kvm_nlist(kd, nl);
+
+	/* デバッグ */
+	for (i = 0; i < sizeof(nl) / sizeof(*nl) - 1; i++) {
+		fprintf(stderr, "\033[94mDEBUG: [%p] %s\033[0m\n",
+					(void *)nl[i].n_value, nl[i].n_name);
+	}
+
+	if (error != 0) {
+		fprintf(stderr,	"\033[91mERROR: %s\033[0m\n",
+					"Some symbols could not be resolved");
 	}
 
 	kvm_close(kd);
