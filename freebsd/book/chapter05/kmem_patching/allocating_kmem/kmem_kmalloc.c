@@ -3,6 +3,9 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+#include <sys/syscall.h>
 
 unsigned char kmalloc[] =
 	"\x55"                            /* push   rbp                       */
@@ -34,9 +37,10 @@ int main(int argc, char **argv)
 {
 	kvm_t *kd;
 	char errbuf[_POSIX2_LINE_MAX];
-	struct nlist nl[] = {{NULL}, {NULL}};
+	struct nlist nl[5] = {[4] = {NULL}};
 	int i, status;
 	unsigned char backup[CODE_SIZE];
+	void *addr;
 
 	printf("\033[95mkmalloc via kmem patching\033[0m\n");
 
@@ -49,6 +53,9 @@ int main(int argc, char **argv)
 	}
 
 	nl[0].n_name = "sys_mkdir";
+	nl[1].n_name = "M_TEMP";
+	nl[2].n_name = "malloc";
+	nl[3].n_name = "copyout";
 
 	/* シンボルの位置を取得する */
 	status = kvm_nlist(kd, nl);
@@ -70,6 +77,32 @@ int main(int argc, char **argv)
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to read from device");
+	}
+
+	/* kmallocにある相対ジャンプ(call命令)をパッチする */
+	*(unsigned int *)&kmalloc[OFF_SYM_M_WAIT] =
+		nl[1].n_value - (nl[0].n_value + OFF_SYM_M_WAIT + sizeof(int));
+	*(unsigned int *)&kmalloc[OFF_SYM_MALLOC] =
+		nl[2].n_value - (nl[0].n_value + OFF_SYM_MALLOC + sizeof(int));
+	*(unsigned int *)&kmalloc[OFF_SYM_COPYOUT] =
+		nl[3].n_value - (nl[0].n_value + OFF_SYM_COPYOUT + sizeof(int));
+
+	status = kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE);
+	printf("Wrote %d bytes to %p\n", status, (void *)nl[0].n_value);
+	if (status == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
+					"Unable to write to device");
+	}
+
+	/* sys_mkdirを呼び出す(kmallocが実行される) */
+	// syscall(SYS_mkdir, (size_t) 128, addr);
+
+	/* sys_mkdirのアセンブラ命令をリストアする */
+	status = kvm_write(kd, nl[0].n_value, backup, CODE_SIZE);
+	printf("Restored %d bytes to %p\n", status, (void *)nl[0].n_value);
+	if (status == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
+					"Unable to write to device");
 	}
 
 	kvm_close(kd);
