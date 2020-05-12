@@ -1,4 +1,8 @@
+#include <fcntl.h>
+#include <kvm.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 unsigned char kmalloc[] =
 	"\x55"                            /* push   rbp                       */
@@ -20,6 +24,7 @@ unsigned char kmalloc[] =
 	"\x5d"                            /* pop    rbp                       */
 	"\xc3";                           /* ret                              */
 
+#define PATH_KMEM "/dev/kmem"
 #define CODE_SIZE sizeof(kmalloc)
 #define OFF_SYM_M_WAIT  0x0c + 3
 #define OFF_SYM_MALLOC  0x18 + 1
@@ -27,7 +32,17 @@ unsigned char kmalloc[] =
 
 int main(int argc, char **argv)
 {
+	kvm_t *kd;
+	char errbuf[_POSIX2_LINE_MAX];
+
 	printf("\033[95mkmalloc via kmem patching\033[0m\n");
+
+	if ((kd = kvm_openfiles(PATH_KMEM, NULL, NULL, O_RDWR, errbuf)) == NULL) {
+		printf("\033[91mERROR: Cannot open %s\033[0m\n", PATH_KMEM);
+		exit(-1);
+	}
+
+	kvm_close(kd);
 
 	return 0;
 }
