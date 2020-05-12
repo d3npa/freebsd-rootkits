@@ -1,4 +1,4 @@
 Vagrant.configure("2") do |config|
-  config.vm.box = "generic/freebsd12"
-  config.vm.synced_folder "book", "/home/vagrant/book"
+  config.vm.box = "generic/freebsd11"
+  config.vm.synced_folder "book", "/book"
 end
