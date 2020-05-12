@@ -35,7 +35,8 @@ int main(int argc, char **argv)
 	kvm_t *kd;
 	char errbuf[_POSIX2_LINE_MAX];
 	struct nlist nl[] = {{NULL}, {NULL}};
-	int i, error;
+	int i, status;
+	unsigned char backup[CODE_SIZE];
 
 	printf("\033[95mkmalloc via kmem patching\033[0m\n");
 
@@ -50,7 +51,7 @@ int main(int argc, char **argv)
 	nl[0].n_name = "sys_mkdir";
 
 	/* シンボルの位置を取得する */
-	error = kvm_nlist(kd, nl);
+	status = kvm_nlist(kd, nl);
 
 	/* デバッグ */
 	for (i = 0; i < sizeof(nl) / sizeof(*nl) - 1; i++) {
@@ -58,9 +59,17 @@ int main(int argc, char **argv)
 					(void *)nl[i].n_value, nl[i].n_name);
 	}
 
-	if (error != 0) {
+	if (status != 0) {
 		fprintf(stderr,	"\033[91mERROR: %s\033[0m\n",
 					"Some symbols could not be resolved");
+	}
+
+	/* sys_mkdirのアセンブラ命令を読み込む */
+	status = kvm_read(kd, nl[0].n_value, backup, CODE_SIZE);
+	printf("Read %d bytes from %p\n", status, (void *)nl[0].n_value);
+	if (status == -1) {
+		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
+					"Unable to read from device");
 	}
 
 	kvm_close(kd);
