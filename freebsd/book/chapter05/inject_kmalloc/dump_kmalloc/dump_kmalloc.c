@@ -17,7 +17,7 @@ int main()
 
 	kd = kvm_openfiles(NULL, NULL, NULL, O_RDWR, errbuf);
 
-	nl[0].n_name = "kmalloc_handler";
+	nl[0].n_name = "kmalloc";
 	kvm_nlist(kd, nl);
 	fprintf(stderr, "DEBUG: [%p] %s\n", (void *)nl[0].n_value, nl[0].n_name);
 

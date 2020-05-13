@@ -13,7 +13,7 @@ struct kmalloc_args {
 	void *ptr;
 };
 
-static int kmalloc_handler(struct thread *td, void *arg)
+static int kmalloc(struct thread *td, void *arg)
 {
 	int error;
 	void *ptr;
