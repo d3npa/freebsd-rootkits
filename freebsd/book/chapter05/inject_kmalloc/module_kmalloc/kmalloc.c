@@ -29,7 +29,7 @@ static int kmalloc(struct thread *td, void *arg)
 static int offset = NO_SYSCALL;
 static struct sysent kmalloc_sysent = {
 	2,
-	kmalloc_handler
+	kmalloc
 };
 
 static int load(struct module *module, int cmd, void *arg)

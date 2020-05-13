@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define KMALLOC_SIZE 0x89 - 0x50
+#define KMALLOC_SIZE 0x8a - 0x50
 
 
 int main()
