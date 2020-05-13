@@ -17,6 +17,9 @@
  * 	A Memrange attribute error (Flags: 0)
  *
  * Error 14: Bad Address (only when writing)
+ * TODO: restart lol
+ * Reinstall FreeBSD?? Lmao
+ * Find help
  */
 int main()
 {

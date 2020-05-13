@@ -29,9 +29,9 @@ unsigned char kmalloc[] =
 
 #define PATH_KMEM "/dev/kmem"
 #define CODE_SIZE sizeof(kmalloc)
-#define OFF_SYM_M_WAIT  0x0c + 3
-#define OFF_SYM_MALLOC  0x18 + 1
-#define OFF_SYM_COPYOUT 0x2e + 1
+#define OFF_SYM_M_TEMP  0x0c + 3
+#define OFF_CALL_MALLOC  0x18
+#define OFF_CALL_COPYOUT 0x2e
 
 int main(int argc, char **argv)
 {
@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 	unsigned char backup[CODE_SIZE];
 	void *addr;
 
-	printf("\033[95mkmalloc via kmem patching\033[0m\n");
+	fprintf(stderr, "\033[95mkmalloc via kmem patching\033[0m\n");
 
 	/* kmemの記述子を取得する */
 	kd = kvm_openfiles(PATH_KMEM, NULL, NULL, O_RDWR, errbuf);
@@ -73,22 +73,21 @@ int main(int argc, char **argv)
 
 	/* sys_mkdirのアセンブラ命令を読み込む */
 	status = kvm_read(kd, nl[0].n_value, backup, CODE_SIZE);
-	printf("Read %d bytes from %p\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "Read %d bytes from %p\n", status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to read from device");
 	}
 
 	/* kmallocにある相対ジャンプ(call命令)をパッチする */
-	*(unsigned int *)&kmalloc[OFF_SYM_M_WAIT] =
-		nl[1].n_value - (nl[0].n_value + OFF_SYM_M_WAIT + sizeof(int));
-	*(unsigned int *)&kmalloc[OFF_SYM_MALLOC] =
-		nl[2].n_value - (nl[0].n_value + OFF_SYM_MALLOC + sizeof(int));
-	*(unsigned int *)&kmalloc[OFF_SYM_COPYOUT] =
-		nl[3].n_value - (nl[0].n_value + OFF_SYM_COPYOUT + sizeof(int));
+	*(unsigned int *)&kmalloc[OFF_SYM_M_TEMP] = nl[1].n_value;
+	*(unsigned int *)&kmalloc[OFF_CALL_MALLOC + 1] =
+		nl[2].n_value - (nl[0].n_value + OFF_CALL_MALLOC);
+	*(unsigned int *)&kmalloc[OFF_CALL_COPYOUT + 1] =
+		nl[3].n_value - (nl[0].n_value + OFF_CALL_COPYOUT);
 
 	status = kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE);
-	printf("Wrote %d bytes to %p\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "Wrote %d bytes to %p\n", status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
@@ -97,9 +96,21 @@ int main(int argc, char **argv)
 	/* sys_mkdirを呼び出す(kmallocが実行される) */
 	// syscall(SYS_mkdir, (size_t) 128, addr);
 
+
+	/*
+		MATHの問題
+		ef c - a == b
+		þá a + b == c
+
+
+		kmallocをkldloadして、メモリを読み込んで確認する
+
+	*/
+	write(1, kmalloc, CODE_SIZE);
+
 	/* sys_mkdirのアセンブラ命令をリストアする */
 	status = kvm_write(kd, nl[0].n_value, backup, CODE_SIZE);
-	printf("Restored %d bytes to %p\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "Restored %d bytes to %p\n", status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");

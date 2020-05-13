@@ -59,6 +59,10 @@ static int explore_kern(struct thread *td, void *arg)
 		I want to know why I can't write to this memory
 	*/
 
+	*(char *)va = 0;
+	uprintf("mem after write %c\n", *(char *)va);
+	*(char *)va = c;
+
 	vm_map_unlock_read(kernel_map);
 	return 0;
 }
