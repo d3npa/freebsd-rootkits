@@ -30,16 +30,16 @@ unsigned char kmalloc[] =
 #define PATH_KMEM "/dev/kmem"
 #define CODE_SIZE sizeof(kmalloc)
 #define OFF_SYM_M_TEMP  0x0c + 3
-#define OFF_CALL_MALLOC  0x18
-#define OFF_CALL_COPYOUT 0x2e
+#define OFF_SYM_MALLOC  0x18 + 1
+#define OFF_SYM_COPYOUT 0x2e + 1
 
 int main(int argc, char **argv)
 {
 	kvm_t *kd;
 	char errbuf[_POSIX2_LINE_MAX];
 	struct nlist nl[5] = {[4] = {NULL}};
-	int i, status;
 	unsigned char backup[CODE_SIZE];
+	int i, status;
 	void *addr;
 
 	fprintf(stderr, "\033[95mkmalloc via kmem patching\033[0m\n");
@@ -80,11 +80,11 @@ int main(int argc, char **argv)
 	}
 
 	/* kmallocにある相対ジャンプ(call命令)をパッチする */
-	*(unsigned int *)&kmalloc[OFF_SYM_M_TEMP] = nl[1].n_value;
-	*(unsigned int *)&kmalloc[OFF_CALL_MALLOC + 1] =
-		nl[2].n_value - (nl[0].n_value + OFF_CALL_MALLOC);
-	*(unsigned int *)&kmalloc[OFF_CALL_COPYOUT + 1] =
-		nl[3].n_value - (nl[0].n_value + OFF_CALL_COPYOUT);
+	*(int *)&kmalloc[OFF_SYM_M_TEMP] = nl[1].n_value;
+	*(int *)&kmalloc[OFF_SYM_MALLOC] =
+		nl[2].n_value - (nl[0].n_value + OFF_SYM_MALLOC + sizeof(int));
+	*(int *)&kmalloc[OFF_SYM_COPYOUT] =
+		nl[3].n_value - (nl[0].n_value + OFF_SYM_COPYOUT + sizeof(int));
 
 	status = kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE);
 	fprintf(stderr, "Wrote %d bytes to %p\n", status, (void *)nl[0].n_value);
@@ -94,19 +94,9 @@ int main(int argc, char **argv)
 	}
 
 	/* sys_mkdirを呼び出す(kmallocが実行される) */
-	// syscall(SYS_mkdir, (size_t) 128, addr);
+	syscall(SYS_mkdir, (size_t) 128, &addr);
 
-
-	/*
-		MATHの問題
-		ef c - a == b
-		þá a + b == c
-
-
-		kmallocをkldloadして、メモリを読み込んで確認する
-
-	*/
-	write(1, kmalloc, CODE_SIZE);
+	// write(1, kmalloc, CODE_SIZE);
 
 	/* sys_mkdirのアセンブラ命令をリストアする */
 	status = kvm_write(kd, nl[0].n_value, backup, CODE_SIZE);
@@ -115,6 +105,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
 	}
+
+	printf("\033[92mAddress of kernel chunk: %p\033[0m\n", addr);
 
 	kvm_close(kd);
 
