@@ -42,8 +42,6 @@ int main(int argc, char **argv)
 	int i, status;
 	void *addr;
 
-	fprintf(stderr, "\033[95mkmalloc via kmem patching\033[0m\n");
-
 	/* kmemの記述子を取得する */
 	kd = kvm_openfiles(PATH_KMEM, NULL, NULL, O_RDWR, errbuf);
 	if (kd == NULL) {
@@ -73,7 +71,7 @@ int main(int argc, char **argv)
 
 	/* sys_mkdirのアセンブラ命令を読み込む */
 	status = kvm_read(kd, nl[0].n_value, backup, CODE_SIZE);
-	fprintf(stderr, "Read %d bytes from %p\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "\033[92mRead %d bytes from %p\033[0m\n", status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to read from device");
@@ -87,26 +85,25 @@ int main(int argc, char **argv)
 		nl[3].n_value - (nl[0].n_value + OFF_SYM_COPYOUT + sizeof(int));
 
 	status = kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE);
-	fprintf(stderr, "Wrote %d bytes to %p\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "\033[92mWrote %d bytes to %p\033[0m\n", status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
 	}
 
 	/* sys_mkdirを呼び出す(kmallocが実行される) */
+	printf("\033[95mInvoking mkdir via syscall #%d\033[0m\n", SYS_mkdir);
 	syscall(SYS_mkdir, (size_t) 128, &addr);
 
-	// write(1, kmalloc, CODE_SIZE);
+	printf("\033[95mAllocated kernel chunk: %p\033[0m\n", addr);
 
 	/* sys_mkdirのアセンブラ命令をリストアする */
 	status = kvm_write(kd, nl[0].n_value, backup, CODE_SIZE);
-	fprintf(stderr, "Restored %d bytes to %p\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "\033[92mRestored %d bytes to %p\033[0m\n", status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
 	}
-
-	printf("\033[92mAddress of kernel chunk: %p\033[0m\n", addr);
 
 	kvm_close(kd);
 
