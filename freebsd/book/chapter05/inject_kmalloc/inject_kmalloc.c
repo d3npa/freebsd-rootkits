@@ -71,7 +71,8 @@ int main(int argc, char **argv)
 
 	/* sys_mkdirのアセンブラ命令を読み込む */
 	status = kvm_read(kd, nl[0].n_value, backup, CODE_SIZE);
-	fprintf(stderr, "\033[92mRead %d bytes from %p\033[0m\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "\033[92mRead %d bytes from %p\033[0m\n",
+						status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to read from device");
@@ -85,7 +86,8 @@ int main(int argc, char **argv)
 		nl[3].n_value - (nl[0].n_value + OFF_SYM_COPYOUT + sizeof(int));
 
 	status = kvm_write(kd, nl[0].n_value, kmalloc, CODE_SIZE);
-	fprintf(stderr, "\033[92mWrote %d bytes to %p\033[0m\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "\033[92mWrote %d bytes to %p\033[0m\n",
+						status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
@@ -99,7 +101,8 @@ int main(int argc, char **argv)
 
 	/* sys_mkdirのアセンブラ命令をリストアする */
 	status = kvm_write(kd, nl[0].n_value, backup, CODE_SIZE);
-	fprintf(stderr, "\033[92mRestored %d bytes to %p\033[0m\n", status, (void *)nl[0].n_value);
+	fprintf(stderr, "\033[92mRestored %d bytes to %p\033[0m\n",
+						status, (void *)nl[0].n_value);
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
