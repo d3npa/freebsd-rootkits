@@ -67,6 +67,8 @@ int main(int argc, char **argv)
 	if (status != 0) {
 		fprintf(stderr,	"\033[91mERROR: %s\033[0m\n",
 					"Some symbols could not be resolved");
+		kvm_close(kd);
+		exit(-1);
 	}
 
 	/* sys_mkdirのアセンブラ命令を読み込む */
@@ -76,6 +78,8 @@ int main(int argc, char **argv)
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to read from device");
+		kvm_close(kd);
+		exit(-1);
 	}
 
 	/* kmallocにある相対ジャンプ(call命令)をパッチする */
@@ -91,6 +95,8 @@ int main(int argc, char **argv)
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
+		kvm_close(kd);
+		exit(-1);
 	}
 
 	/* sys_mkdirを呼び出す(kmallocが実行される) */
@@ -106,6 +112,8 @@ int main(int argc, char **argv)
 	if (status == -1) {
 		fprintf(stderr, "\033[91mERROR: %s\033[0m\n",
 					"Unable to write to device");
+		kvm_close(kd);
+		exit(-1);
 	}
 
 	kvm_close(kd);
