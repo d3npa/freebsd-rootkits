@@ -6,6 +6,14 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#define KMALLOC_SIZE            0x90 - 0x50
+#define OFFSET_M_WAIT           0x0c + 3
+#define OFFSET_MALLOC           0x18 + 1
+#define OFFSET_COPYOUT          0x2e + 1
+#define OFFSET_HOOK_START       0x0f
+#define OFFSET_HOOK_MSG         0x0f + 9
+#define OFFSET_HOOK_UPRINTF     0x0f + 14
+
 unsigned char kmalloc[] =
 /* 0000000000000050 <kmalloc>: */
 /* 50: */  "\x55"                          /* push   rbp                      */
@@ -26,19 +34,41 @@ unsigned char kmalloc[] =
 /* 87: */  "\x5b"                          /* pop    rbx                      */
 /* 88: */  "\x5d"                          /* pop    rbp                      */
 /* 89: */  "\xc3";                         /* ret                             */
+unsigned char backup[KMALLOC_SIZE];
+unsigned char hook[] =
+           "Hello, world!\n\0"
+           "\x55"                          /* push   %ebp                     */
+           "\x89\xe5"                      /* mov    %esp,%ebp                */
+           "\x83\xec\x04"                  /* sub    $0x4,%esp                */
+           "\xc7\x04\x24\x00\x00\x00\x00"  /* movl   $0x0,(%esp)              */
+           "\xe8\xfc\xff\xff\xff"          /* call   uprintf                  */
+           "\x31\xc0"                      /* xor    %eax,%eax                */
+           "\x83\xc4\x04"                  /* add    $0x4,%esp                */
+           "\x5d";                         /* pop    %ebp                     */
 
-#define KMALLOC_SIZE   0x90 - 0x50
-#define OFFSET_M_WAIT  0x0c + 3
-#define OFFSET_MALLOC  0x18 + 1
-#define OFFSET_COPYOUT 0x2e + 1
+/*
+ *
+ * ffffffff80bd5ea0 <sys_mkdir>:
+ * ffffffff80bd5ea0:   55                      push   rbp
+ * ffffffff80bd5ea1:   48 89 e5                mov    rbp,rsp
+ * ffffffff80bd5ea4:   48 8b 16                mov    rdx,QWORD PTR [rsi]
+ * ffffffff80bd5ea7:   44 8b 46 08             mov    r8d,DWORD PTR [rsi+0x8]
+ * ffffffff80bd5eab:   be 9c ff ff ff          mov    esi,0xffffff9c
+ * ffffffff80bd5eb0:   31 c9                   xor    ecx,ecx
+ * ffffffff80bd5eb2:   5d                      pop    rbp
+ * ffffffff80bd5eb3:   eb 0b                   jmp    ffffffff80bd5ec0 <kern_mkdirat>
+ * ffffffff80bd5eb5:   66 2e 0f 1f 84 00 00    nop    WORD PTR cs:[rax+rax+0x0]
+ * ffffffff80bd5ebc:   00 00 00
+ * ffffffff80bd5ebf:   90                      nop
+ */
+
 
 /*
  * 	Function implementation of inject_kmalloc.c
+ * 	Also reads sys_mkdir into backup
  * 	WARNING: no checks - bad code :þ
  */
 void kvm_kmalloc(kvm_t *kd, size_t size, void **addr) {
-	unsigned char backup[KMALLOC_SIZE];
-
 	/* Resolve symbols */
 	struct nlist nl[] = {
 		{ .n_name = "sys_mkdir" },
@@ -47,7 +77,6 @@ void kvm_kmalloc(kvm_t *kd, size_t size, void **addr) {
 		{ .n_name = "copyout"   },
 		{ NULL }
 	};
-
 	kvm_nlist(kd, nl);
 
 	/* Patch offsets in kmalloc */
@@ -76,15 +105,41 @@ int main()
 {
 	kvm_t *kd;
 	char errbuf[_POSIX2_LINE_MAX];
+	void *chunk;
+	int i, call_offset;
 
 	if ((kd = kvm_openfiles("/dev/kmem", NULL, NULL, O_RDWR, errbuf)) == NULL) {
 		fprintf(stderr,
 			"\033[91mError: Could not open device\033[0m\n");
 	}
 
-	void *addr;
-	kvm_kmalloc(kd, 128, &addr);
-	printf("Addr of chunk: %p\n", (void *)addr);
+	/*
+	 * 	Acquire chunk of kernel heap
+	 * 	Also reads sys_mkdir into backup
+	 */
+	kvm_kmalloc(kd, 128, &chunk);
+	printf("Addr of chunk: %p\n", chunk);
+
+	/* Find offset of first call instruction */
+	for (i = call_offset = 0;; i++) {
+		unsigned char instruction = backup[i];
+		if (instruction == 0xeb) {
+			// Found
+			call_offset = i;
+			break;
+		} else if (instruction == 0xc3) {
+			// Return
+			fprintf(stderr, "Error: did not find 0xeb byte!\n");
+			return -1;
+		}
+	}
+
+	// フックにある相対アドレスをパッチ
+	*(int)&hook[OFFSET_HOOK_MSG] = chunk;
+	// *(int)&hook[OFFSET_HOOK_UPRINTF] = uprinf
+
+	// 確保すべきチャンク・サイズを把握したい
+
 
 	kvm_close(kd);
 
