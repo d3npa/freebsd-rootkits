@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <nlist.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -11,10 +12,10 @@
 #define OFFSET_MALLOC           0x18 + 1
 #define OFFSET_COPYOUT          0x2e + 1
 #define OFFSET_HOOK_START       0x0f
-#define OFFSET_HOOK_MSG         0x19 + 2
-#define OFFSET_HOOK_UPRINTF     0x23 + 2
-#define HOOK_SIZE		0x3a - 0x00
-#define JUMP_SIZE		0x46 - 0x3a
+#define OFFSET_HOOK_MSG         0x11 + 2
+#define OFFSET_HOOK_UPRINTF     0x1b + 2
+#define HOOK_SIZE		0x29 - 0x00
+#define JUMP_SIZE		0x35 - 0x29
 
 unsigned char kmalloc[] =
 /* 0000000000000050 <kmalloc>: */
@@ -41,24 +42,18 @@ unsigned char hook[] =
 /* 0000000000000000 <msg>: */
 /* 00: */  "Hello, world!\n\0"
 /* 000000000000000f <hook>: */
-/* 0f: */ "\x55"                         /* push   rbp                      */
-/* 10: */ "\x48\x89\xe5"                 /* mov    rbp,rsp                  */
-/* 13: */ "\x48\x83\xec\x08"             /* sub    rsp,0x8                  */
-/* 17: */ "\x50"                         /* push   rax                      */
-/* 18: */ "\x53"                         /* push   rbx                      */
-/* 19: */ "\x48\xbb\0\0\0\0\0\0\0\0"     /* mov    rbx,0x0                  */
-/* 23: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                  */
-/* 2d: */ "\x48\x89\x1c\x24"             /* mov    QWORD PTR [rsp],rbx      */
-/* 31: */ "\x90\x90"                     /* call   QWORD PTR [rax]          */
-/* 33: */ "\x5b"                         /* pop    rbx                      */
-/* 34: */ "\x58"                         /* pop    rax                      */
-/* 35: */ "\x48\x83\xc4\x08"             /* add    rsp,0x8                  */
-/* 39: */ "\x5d";                        /* pop    rbp                      */
+/* 0f: */ "\x57"                         /* push   rdi                     */
+/* 10: */ "\x50"                         /* push   rax                     */
+/* 11: */ "\x48\xbf\0\0\0\0\0\0\0\0"     /* mov    rdi,0x0                 */
+/* 1b: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                 */
+/* 25: */ /*"\xff\xd0"*/ "\x90\x90"                     /* call   rax                     */
+/* 27: */ "\x58"                         /* pop    rax                     */
+/* 28: */ "\x5f";                        /* pop    rdi                     */
 
 unsigned char jump[] =
-/* 000000000000003a <jump>: */
-/* 3a: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                  */
-/* 44: */ "\xff\x20";                    /* jmp    QWORD PTR [rax]          */
+/* 0000000000000029 <jump>: */
+/* 29: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                 */
+/* 33: */ "\xff\xe0";                    /* jmp    rax                     */
 
 /*
  *	End goal:
@@ -154,26 +149,23 @@ int main()
 	kvm_write(kd, chunk + HOOK_SIZE, backup, jmp_offset);
 	kvm_write(kd, chunk + HOOK_SIZE + jmp_offset, jump, JUMP_SIZE);
 
-	unsigned char dump[size];
-	kvm_read(kd, chunk, dump, size);
-
-	write(1, dump, size);
-
 	/* デバッグ - 計算した相対アドレスを自ら確認 */
 	fprintf(stderr, "\033[90m[DEBUG] jmp addr in mkdir %p\033[0m\n",
 		(void *)(nl[0].n_value + jmp_offset));
-	fprintf(stderr, "\033[90m[DEBUG] will jmp to %p\033[0m\n",
+	fprintf(stderr, "\033[90m[DEBUG] hook will jmp to %p\033[0m\n",
 		(void *)*(unsigned long *)&jump[2]);
+
+	unsigned char dump[size];
+	kvm_read(kd, chunk, dump, size);
+	write(1, dump, size);
 
 	/* jumpを再利用。hookの絶対アドレスを指す */
 	*(unsigned long*)&jump[2] = chunk + OFFSET_HOOK_START;
+	fprintf(stderr, "\033[90m[DEBUG] mkdir will jmp to %p\033[0m\n",
+		(void *)*(unsigned long *)&jump[2]);
 
-	/* hookをようやく導入する */
-	fprintf(stderr, "%p\n", (void *)*(unsigned long*)&jump[2]);
-	// panicってます。本と違ってcallやjmpは64ビットになってるので、
-	// もしかしたらその形式の問題かと思ってる。
-
-	// kvm_write(kd, nl[0].n_value, jump, JUMP_SIZE);
+	// sys_mkdirをhookにジャンプさせる
+	kvm_write(kd, nl[0].n_value, jump, JUMP_SIZE);
 
 	kvm_close(kd);
 	return 0;
