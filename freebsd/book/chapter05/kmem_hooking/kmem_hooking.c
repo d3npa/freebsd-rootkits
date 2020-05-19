@@ -7,13 +7,6 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-/*
- * 全てを書き直したほうがいいかもしれない
- * - シェルコードをsys_mkdirの上に書き込めば問題なく実行するから、シェルコードは正しい。
- * - ヒープに書き込んだシェルコードのcall命令をNOPに代えれば、問題なく実行する。
- * - callは、ヒープからはだめみたい。jmpは大丈夫なのに。
- */
-
 #define KMALLOC_SIZE            0x90 - 0x50
 #define OFFSET_M_WAIT           0x0c + 3
 #define OFFSET_MALLOC           0x18 + 1
@@ -45,7 +38,7 @@ unsigned char kmalloc[] =
 /* 89: */ "\xc3";                        /* ret                             */
 
 unsigned char hook[] =
-/* 0000000000000000 <msg>:                                                 */
+/* 0000000000000000 <msg>:                                                  */
 /* 00: */  "Hello, world!\n\0"
 /* 000000000000000f <hook>:                                                 */
 /* 0f: */  "\x50"                        /* push   rax                      */
@@ -94,6 +87,9 @@ int main()
 		return -1;
 	}
 
+	fprintf(stderr, "\033[92m[+] sys_mkdir is at %p\033[0m\n",
+						(void *)nl[0].n_value);
+
 	/* sys_mkdirの命令を読み込む */
 	kvm_read(kd, nl[0].n_value, backup, KMALLOC_SIZE);
 
@@ -116,9 +112,6 @@ int main()
 		}
 	}
 
-	int size = HOOK_SIZE + jmp_offset + JUMP_SIZE;
-	fprintf(stderr, "[+] Need to allocate 0x%x bytes for hook\n", size);
-
 	/* kmallocのシェルコードを、前の段階で解決したアドレスでパッチする */
 	*(unsigned int *)&kmalloc[OFFSET_M_WAIT] = nl[1].n_value;
 	*(unsigned int *)&kmalloc[OFFSET_MALLOC] = nl[2].n_value -
@@ -131,36 +124,37 @@ int main()
 	 * それから、mkdirシスコールを実行することでヒープ領域を確保する。
 	 * 最後にsys_mkdirもとの状態に戻す。
 	 */
+	int size = HOOK_SIZE + jmp_offset + JUMP_SIZE;
 	kvm_write(kd, nl[0].n_value, kmalloc, KMALLOC_SIZE);
 	syscall(SYS_mkdir, (size_t) size, &chunk);
 	kvm_write(kd, nl[0].n_value, backup, KMALLOC_SIZE);
 
-	fprintf(stderr, "[+] Allocated kernel chunk at %p\n", (void *)chunk);
+	fprintf(stderr, "\033[92m[+] allocated 0x%x bytes at %p\033[0m\n",
+							size, (void *)chunk);
 
 	/* hookのシェルコードを、前の段階で解決したアドレスでパッチする */
 	*(unsigned long *)&hook[OFFSET_HOOK_MSG] = chunk;
 	*(unsigned long *)&hook[OFFSET_HOOK_UPRINTF] = nl[4].n_value;
 	*(unsigned long *)&jump[2] = nl[0].n_value + jmp_offset;
 
-	// call命令をNOPに替える（一時的）
- 	// memset(&hook[0x25], 0x90, 2);
-
 	/* 確保したヒープ・チャンクにhookを書き込む */
 	kvm_write(kd, chunk, hook, HOOK_SIZE);
 	kvm_write(kd, chunk + HOOK_SIZE, backup, jmp_offset);
 	kvm_write(kd, chunk + HOOK_SIZE + jmp_offset, jump, JUMP_SIZE);
 
-	/* 実行時にhookの命令を確認したい */
-	unsigned char dump[size];
-	kvm_read(kd, chunk, dump, size);
-	write(1, dump, size);
-
 	/* jumpを再利用し、sys_mkdirからhookにジャンプさせる */
 	*(unsigned long*)&jump[2] = chunk + 0xf;
 	kvm_write(kd, nl[0].n_value, jump, JUMP_SIZE);
 
-	fprintf(stderr, "\033[90m[DEBUG] mkdir will jmp to %p\033[0m\n",
-		(void *)*(unsigned long *)&jump[2]);
+	/* いろいろ表示したい */
+	unsigned char dump[size];
+	kvm_read(kd, chunk, dump, size);
+	fprintf(stderr, "\033[92m[+] mkdir will jmp to %p\033[0m\n",
+					(void *)*(unsigned long *)&jump[2]);
+	fprintf(stderr, "\033[92m[+] hook will jmp back to %p\033[0m\n",
+					(void *)nl[0].n_value + jmp_offset);
+	fprintf(stderr, "\033[95m[+] dumping hook code:\033[0m\n");
+	write(1, dump, size);
 
 	kvm_close(kd);
 	return 0;
