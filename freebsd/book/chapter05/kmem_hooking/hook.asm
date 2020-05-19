@@ -8,18 +8,21 @@ msg:
 
 hook:
 	; レジスタの値を保存
-	push 	rdi
 	push 	rax
-
+	push 	rbx
+	push 	rdi
+	push 	r14
 	; uprintを呼び出す
+	xor 	rax, rax
+	xor 	rbx, rbx
 	mov 	QWORD rdi, 0x00
-	mov 	QWORD rax, 0x00
-	call 	rax
-
+	mov 	QWORD r14, 0x00
+	call 	r14
 	; レジスタをリストア
-	pop 	rax
+	pop 	r14
 	pop 	rdi
-
+	pop 	rbx
+	pop 	rax
 jump:
-	mov 	QWORD rax, 0x00
-	jmp 	rax
+	mov 	QWORD r14, 0x00
+	jmp 	r14
