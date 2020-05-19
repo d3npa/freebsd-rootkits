@@ -18,14 +18,13 @@
 #define OFFSET_M_WAIT           0x0c + 3
 #define OFFSET_MALLOC           0x18 + 1
 #define OFFSET_COPYOUT          0x2e + 1
-#define OFFSET_HOOK_START       0x0f
-#define OFFSET_HOOK_MSG         0x11 + 2
-#define OFFSET_HOOK_UPRINTF     0x1b + 2
-#define HOOK_SIZE		0x29 - 0x00
-#define JUMP_SIZE		0x35 - 0x29
+#define HOOK_SIZE               0x2b - 0x00
+#define JUMP_SIZE               0x37 - 0x2b
+#define OFFSET_HOOK_MSG         0x12 + 2
+#define OFFSET_HOOK_UPRINTF     0x1c + 2
 
 unsigned char kmalloc[] =
-/* 0000000000000050 <kmalloc>: */
+/* 0000000000000050 <kmalloc>:                                              */
 /* 50: */ "\x55"                         /* push   rbp                      */
 /* 51: */ "\x48\x89\xe5"                 /* mov    rbp,rsp                  */
 /* 54: */ "\x53"                         /* push   rbx                      */
@@ -46,26 +45,24 @@ unsigned char kmalloc[] =
 /* 89: */ "\xc3";                        /* ret                             */
 
 unsigned char hook[] =
-/* 0000000000000000 <msg>: */
+/* 0000000000000000 <msg>:                                                 */
 /* 00: */  "Hello, world!\n\0"
-/* 000000000000000f <hook>: */
-/* 0f: */ "\x57"                         /* push   rdi                     */
-/* 10: */ "\x50"                         /* push   rax                     */
-/* 11: */ "\x48\xbf\0\0\0\0\0\0\0\0"     /* mov    rdi,0x0                 */
-/* 1b: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                 */
-/* 25: */ "\xff\xd0"                     /* call   rax                     */
-/* 27: */ "\x58"                         /* pop    rax                     */
-/* 28: */ "\x5f";                        /* pop    rdi                     */
+/* 000000000000000f <hook>:                                                 */
+/* 0f: */  "\x50"                        /* push   rax                      */
+/* 10: */  "\x56"                        /* push   rsi                      */
+/* 11: */  "\x57"                        /* push   rdi                      */
+/* 12: */  "\x48\xbf\0\0\0\0\0\0\0\0"    /* mov    rdi,0x0                  */
+/* 1c: */  "\x48\xb8\0\0\0\0\0\0\0\0"    /* mov    rax,0x0                  */
+/* 26: */  "\xff\xd0"                    /* call   rax                      */
+/* 28: */  "\x5f"                        /* pop    rdi                      */
+/* 29: */  "\x5e"                        /* pop    rsi                      */
+/* 2a: */  "\x58";                       /* pop    rax                      */
 
 unsigned char jump[] =
-/* 0000000000000029 <jump>: */
-/* 29: */ "\x48\xb8\0\0\0\0\0\0\0\0"     /* mov    rax,0x0                 */
-/* 33: */ "\xff\xe0";                    /* jmp    rax                     */
+/* 000000000000002b <jump>:                                                 */
+/* 2b: */  "\x48\xb8\0\0\0\0\0\0\0\0"    /* mov    rax,0x0                  */
+/* 35: */  "\xff\xe0";                   /* jmp    rax                      */
 
-/*
- *	End goal:
- *	Hook syscall via kmem patching
- */
 int main()
 {
 	kvm_t *kd;
@@ -73,6 +70,7 @@ int main()
 	unsigned char backup[KMALLOC_SIZE];
 	int i, jmp_offset;
 	unsigned long chunk;
+
 	struct nlist nl[6] = {
 		{ .n_name = "sys_mkdir" },
 		{ .n_name = "M_TEMP"    },
@@ -82,6 +80,7 @@ int main()
 		{ NULL }
 	};
 
+	/* カーネルメモリデバイスを開く */
 	kd = kvm_openfiles("/dev/kmem", NULL, NULL, O_RDWR, errbuf);
 	if (kd == NULL) {
 		fprintf(stderr,
@@ -89,27 +88,30 @@ int main()
 		return -1;
 	}
 
-
 	/* シンボル解決 */
-	kvm_nlist(kd, nl);
+	if (kvm_nlist(kd, nl) == -1) {
+		fprintf(stderr, "\033[91mError: %s\033[0m\n", kvm_geterr(kd));
+		return -1;
+	}
 
-	/* sys_mkdirを読み込む */
+	/* sys_mkdirの命令を読み込む */
 	kvm_read(kd, nl[0].n_value, backup, KMALLOC_SIZE);
 
 	/*
-	 * フック関数をカーネルに書き込むのに必要なチャンクサイズを把握する
+	 * sys_mkdirの中にはjmp命令がある。
+	 * ヒープからsys_mkdirに戻るとき、実行が止めないように
+	 * そのjmp命令に戻りたいので、オフセットを取る。
 	 */
-
-	/* 最初のジャンプ命令のオフセットを取る */
-	for (i = jmp_offset = 0;; i++) {
+	for (i = jmp_offset = JUMP_SIZE;; i++) {
 		unsigned char instruction = backup[i];
 		if (instruction == 0xeb) {
-			// Found
+			// jmp
 			jmp_offset = i;
 			break;
 		} else if (instruction == 0xc3) {
-			// Return
-			fprintf(stderr, "Error: did not find 0xeb byte!\n");
+			// ret
+			fprintf(stderr, "\033[91mError: %s\033[0m\n",
+				"Did not find 0xe8 instruction in sys_mkdir!");
 			return -1;
 		}
 	}
@@ -117,66 +119,48 @@ int main()
 	int size = HOOK_SIZE + jmp_offset + JUMP_SIZE;
 	fprintf(stderr, "[+] Need to allocate 0x%x bytes for hook\n", size);
 
-	/*
-	 * カーネル空間のチャンクを確保する
-	 */
-
-	/* kmallocのコード内さまざまな相対アドレスを解決する */
+	/* kmallocのシェルコードを、前の段階で解決したアドレスでパッチする */
 	*(unsigned int *)&kmalloc[OFFSET_M_WAIT] = nl[1].n_value;
 	*(unsigned int *)&kmalloc[OFFSET_MALLOC] = nl[2].n_value -
 		(nl[0].n_value + OFFSET_MALLOC + sizeof(unsigned int));
 	*(unsigned int *)&kmalloc[OFFSET_COPYOUT] = nl[3].n_value -
 		(nl[0].n_value + OFFSET_COPYOUT + sizeof(unsigned int));
 
-	/* kmallocをsys_mkdirのところに投入し、実行後にsys_mkdirをリストア */
+	/*
+	 * kmallocのシェルコードをsys_mkdirのところに投入する。
+	 * それから、mkdirシスコールを実行することでヒープ領域を確保する。
+	 * 最後にsys_mkdirもとの状態に戻す。
+	 */
 	kvm_write(kd, nl[0].n_value, kmalloc, KMALLOC_SIZE);
 	syscall(SYS_mkdir, (size_t) size, &chunk);
 	kvm_write(kd, nl[0].n_value, backup, KMALLOC_SIZE);
 
 	fprintf(stderr, "[+] Allocated kernel chunk at %p\n", (void *)chunk);
 
-	/*
-	 * フック関数をチャンクに書き込み、sys_mkdirのところにjmp命令を投入する
-	 */
-
-	/* hookコード内の相対アドレスを計算する */
+	/* hookのシェルコードを、前の段階で解決したアドレスでパッチする */
 	*(unsigned long *)&hook[OFFSET_HOOK_MSG] = chunk;
 	*(unsigned long *)&hook[OFFSET_HOOK_UPRINTF] = nl[4].n_value;
-	 	// -
-		// (chunk + OFFSET_HOOK_UPRINTF + sizeof(unsigned long));
 	*(unsigned long *)&jump[2] = nl[0].n_value + jmp_offset;
 
+	// call命令をNOPに替える（一時的）
+ 	// memset(&hook[0x25], 0x90, 2);
 
-	// call命令をNOPに替える
- 	memset(&hook[0x25], 0x90, 2);
-
-	/*
-	 * チャンクの構成
-	 * - hook自体のコード
-	 * - sys_mkdir上書きした命令
-	 * - sys_mkdirに戻るjmp命令
-	 */
+	/* 確保したヒープ・チャンクにhookを書き込む */
 	kvm_write(kd, chunk, hook, HOOK_SIZE);
 	kvm_write(kd, chunk + HOOK_SIZE, backup, jmp_offset);
 	kvm_write(kd, chunk + HOOK_SIZE + jmp_offset, jump, JUMP_SIZE);
 
-	/* デバッグ - 計算した相対アドレスを自ら確認 */
-	fprintf(stderr, "\033[90m[DEBUG] jmp addr in mkdir %p\033[0m\n",
-		(void *)(nl[0].n_value + jmp_offset));
-	fprintf(stderr, "\033[90m[DEBUG] hook will jmp to %p\033[0m\n",
-		(void *)*(unsigned long *)&jump[2]);
-
+	/* 実行時にhookの命令を確認したい */
 	unsigned char dump[size];
 	kvm_read(kd, chunk, dump, size);
 	write(1, dump, size);
 
-	/* jumpを再利用。hookの絶対アドレスを指す */
-	*(unsigned long*)&jump[2] = chunk + OFFSET_HOOK_START;
+	/* jumpを再利用し、sys_mkdirからhookにジャンプさせる */
+	*(unsigned long*)&jump[2] = chunk + 0xf;
+	kvm_write(kd, nl[0].n_value, jump, JUMP_SIZE);
+
 	fprintf(stderr, "\033[90m[DEBUG] mkdir will jmp to %p\033[0m\n",
 		(void *)*(unsigned long *)&jump[2]);
-
-	// sys_mkdirをhookにジャンプさせる
-	kvm_write(kd, nl[0].n_value, jump, JUMP_SIZE);
 
 	kvm_close(kd);
 	return 0;
