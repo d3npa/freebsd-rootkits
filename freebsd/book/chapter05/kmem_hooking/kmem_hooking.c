@@ -11,10 +11,10 @@
 #define OFFSET_M_WAIT           0x0c + 3
 #define OFFSET_MALLOC           0x18 + 1
 #define OFFSET_COPYOUT          0x2e + 1
-#define HOOK_SIZE               0x2b - 0x00
-#define JUMP_SIZE               0x37 - 0x2b
-#define OFFSET_HOOK_MSG         0x12 + 2
-#define OFFSET_HOOK_UPRINTF     0x1c + 2
+#define HOOK_SIZE               0x33 - 0x00
+#define JUMP_SIZE               0x3f - 0x33
+#define OFFSET_HOOK_MSG         0x19 + 2
+#define OFFSET_HOOK_UPRINTF     0x23 + 2
 
 unsigned char kmalloc[] =
 /* 0000000000000050 <kmalloc>:                                              */
@@ -25,7 +25,7 @@ unsigned char kmalloc[] =
 /* 56: */ "\x48\x89\xf3"                 /* mov    rbx,rsi                  */
 /* 59: */ "\x48\x8b\x3e"                 /* mov    rdi,QWORD PTR [rsi]      */
 /* 5c: */ "\x48\xc7\xc6\x00\x00\x00\x00" /* mov    rsi,0x0                  */
-/* 63: */ "\xba\x02\x01\x00\x00"         /* mov    edx,0x102                */
+/* 63: */ "\xba\x02\x41\x00\x00"         /* mov    edx,0x4102                */
 /* 68: */ "\xe8\x00\x00\x00\x00"         /* call   6d <kmalloc+0x1d>        */
 /* 6d: */ "\x48\x89\x45\xf0"             /* mov    QWORD PTR [rbp-0x10],rax */
 /* 71: */ "\x48\x8b\x73\x08"             /* mov    rsi,QWORD PTR [rbx+0x8]  */
@@ -42,19 +42,23 @@ unsigned char hook[] =
 /* 00: */  "Hello, world!\n\0"
 /* 000000000000000f <hook>:                                                 */
 /* 0f: */  "\x50"                        /* push   rax                      */
-/* 10: */  "\x56"                        /* push   rsi                      */
-/* 11: */  "\x57"                        /* push   rdi                      */
-/* 12: */  "\x48\xbf\0\0\0\0\0\0\0\0"    /* mov    rdi,0x0                  */
-/* 1c: */  "\x48\xb8\0\0\0\0\0\0\0\0"    /* mov    rax,0x0                  */
-/* 26: */  "\xff\xd0"                    /* call   rax                      */
-/* 28: */  "\x5f"                        /* pop    rdi                      */
-/* 29: */  "\x5e"                        /* pop    rsi                      */
-/* 2a: */  "\x58";                       /* pop    rax                      */
+/* 10: */  "\x57"                        /* push   rdi                      */
+/* 11: */  "\x56"                        /* push   rsi                      */
+/* 12: */  "\x52"                        /* push   rdx                      */
+/* 13: */  "\x48\x31\xf6"                /* xor    rsi,rsi                  */
+/* 16: */  "\x48\x31\xd2"                /* xor    rdx,rdx                  */
+/* 19: */  "\x48\xbf\0\0\0\0\0\0\0\0"    /* mov    rdi,0x0                  */
+/* 23: */  "\x48\xb8\0\0\0\0\0\0\0\0"    /* mov    rax,0x0                  */
+/* 2d: */  "\xff\xd0"                    /* call   rax                      */
+/* 2f: */  "\x5a"                        /* pop    rdx                      */
+/* 30: */  "\x5e"                        /* pop    rsi                      */
+/* 31: */  "\x5f"                        /* pop    rdi                      */
+/* 32: */  "\x58";                       /* pop    rax                      */
 
 unsigned char jump[] =
-/* 000000000000002b <jump>:                                                 */
-/* 2b: */  "\x48\xb8\0\0\0\0\0\0\0\0"    /* mov    rax,0x0                  */
-/* 35: */  "\xff\xe0";                   /* jmp    rax                      */
+/* 0000000000000033 <jump>:                                                 */
+/* 33: */  "\x48\xb8\0\0\0\0\0\0\0\0"  /* mov    rax,0x0                    */
+/* 3d: */  "\xff\xe0";                 /* jmp    rax                        */
 
 int main()
 {
