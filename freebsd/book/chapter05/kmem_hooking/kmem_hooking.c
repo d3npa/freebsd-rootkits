@@ -25,7 +25,7 @@ unsigned char kmalloc[] =
 /* 56: */ "\x48\x89\xf3"                 /* mov    rbx,rsi                  */
 /* 59: */ "\x48\x8b\x3e"                 /* mov    rdi,QWORD PTR [rsi]      */
 /* 5c: */ "\x48\xc7\xc6\x00\x00\x00\x00" /* mov    rsi,0x0                  */
-/* 63: */ "\xba\x02\x41\x00\x00"         /* mov    edx,0x4102                */
+/* 63: */ "\xba\x02\x41\x00\x00"         /* mov    edx,0x4102               */
 /* 68: */ "\xe8\x00\x00\x00\x00"         /* call   6d <kmalloc+0x1d>        */
 /* 6d: */ "\x48\x89\x45\xf0"             /* mov    QWORD PTR [rbp-0x10],rax */
 /* 71: */ "\x48\x8b\x73\x08"             /* mov    rsi,QWORD PTR [rbx+0x8]  */

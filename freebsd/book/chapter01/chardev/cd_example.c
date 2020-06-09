@@ -51,7 +51,7 @@ write(struct cdev *dev, struct uio *uio, int ioflag)
 }
 
 static struct make_dev_args args;
-static struct cdev *dev; // sdevってどういういみ？
+static struct cdev *dev;
 
 static int
 load(struct module *module, int cmd, void *arg)

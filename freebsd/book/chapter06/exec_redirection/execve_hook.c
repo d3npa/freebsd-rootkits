@@ -59,12 +59,12 @@ static int load(struct module *module, int cmd, void *arg)
 	switch (cmd) {
 	case MOD_LOAD:
 		sysent[SYS_execve].sy_call = (sy_call_t *)execve_hook;
-		uprintf("Execve is at %p\n",
+		uprintf("execve is at %p\n",
 			(void *)sysent[SYS_execve].sy_call);
 		break;
 	case MOD_UNLOAD:
 		sysent[SYS_execve].sy_call = (sy_call_t *)sys_execve;
-		uprintf("Execve is at %p\n",
+		uprintf("execve is at %p\n",
 			(void *)sysent[SYS_execve].sy_call);
 		break;
 	}
