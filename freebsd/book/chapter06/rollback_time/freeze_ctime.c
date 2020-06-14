@@ -33,7 +33,7 @@ int main()
 	}
 
 	/* 目的関数の位置を解決する */
-	nl[0].n_name = "ufs_itimes";
+	nl[0].n_name = "ufs_itimes_locked";
 	if (kvm_nlist(kd, nl) != 0) {
 		fprintf(stderr, "ERROR: %s\n", errbuf);
 		exit(-1);
@@ -42,7 +42,7 @@ int main()
 	printf("Function \033[94m%s\033[0m is at \033[94m0x%lx\033[0m\n", 
 			nl[0].n_name, nl[0].n_value);
 
-	/* ufs_itimesの最初命令を読み込む */
+	/* ufs_itimes_lockedの最初命令を読み込む */
 	if (kvm_read(kd, nl[0].n_value, &backup, 1) != 1) {
 		fprintf(stderr, "ERROR: Could not read from 0x%lx\n", 
 			nl[0].n_value);
@@ -52,7 +52,7 @@ int main()
 	printf("First instruction of \033[94m%s\033[0m is "
 			"\033[94m0x%hhx\033[0m\n", nl[0].n_name, backup);
 
-	/* ufs_itimesの最初命令をretに書き換え、関数を無効化する */
+	/* ufs_itimes_lockedの最初命令をretに書き換え、関数を無効化する */
 	if (kvm_write(kd, nl[0].n_value, RETURN, 1) != 1) {
 		fprintf(stderr, "ERROR: Could not write to 0x%lx\n", 
 			nl[0].n_value);
@@ -76,7 +76,7 @@ int main()
 	write(fd, contents, strlen(contents));
 	close(fd);
 
-	/* ufs_itimesをもとに戻す */
+	/* ufs_itimes_lockedをもとに戻す */
 	if (kvm_write(kd, nl[0].n_value, &backup, 1) != 1) {
 		fprintf(stderr, "ERROR: Could not write to 0x%lx\n", 
 			nl[0].n_value);
