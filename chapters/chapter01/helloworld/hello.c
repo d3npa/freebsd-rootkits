@@ -4,11 +4,12 @@
 #include <sys/kernel.h>
 
 static void greeting() {
+	// Print message and its address because it's cool!
 	char *message = "Hello, world!";
-	uprintf("%s (addr: %p)\n", message, message);
+	uprintf("[Addr: %p] %s\n", message, message);
 }
 
-// define load function
+// define what happens when the module is loaded
 static int
 load(struct module *module, int cmd, void *args)
 {
@@ -16,7 +17,7 @@ load(struct module *module, int cmd, void *args)
 
 	switch(cmd) {
 	case MOD_LOAD:
-		greeting();
+		greeting(); // call custom function
 		break;
 
 	case MOD_UNLOAD:
