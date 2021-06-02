@@ -1,6 +1,6 @@
 # FreeBSD Rootkits
 
-「Designing BSD Rootkits」の演習問題を2020年にやってみました。開発環境の構築に関しては [`setup-ja.md`](./setup-ja.md) をご確認ください。
+「Designing BSD Rootkits」の演習問題を2020年にやってみました。開発環境の構築に関しては [`setup-ja.md`](./setup-ja.md) をご確認ください。I tried completing the exercises from "Designing BSD Rootkits" in 2020. Environment setup instructions are in [`setup-en.md`](./setup-en.md).
 
 演習問題に取り組んでいた同じ頃に、友達の xcellerator さんも同じ本を拾って、問題を自分のレポジトリに挙げました。コードのクオリティが非常に高いので、気になる方はぜひ見てくださいね！ Around the same time I did these exercises, my friend xcellerator picked up the book and published their answers to their own repository. The code quality is really high, so be sure to have a look!
 
