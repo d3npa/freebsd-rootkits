@@ -41,7 +41,7 @@ Vagrant の基本コマンド一覧
 
 ## 開発環境の確認
 
-開発環境を確認するために `chapters/chapter01/syscall/` をコンパイルしてロードしてみます。問題がなければ、アウトプットは以下のようになるでしょう。
+開発環境を確認するために `chapters/01/hello_world/` をコンパイルしてロードしてみます。問題がなければ、アウトプットは以下のようになるでしょう。
 
 ```
 vagrant@freebsd:~/chapters/01/hello_world % sudo kldload ./hello_world.ko
