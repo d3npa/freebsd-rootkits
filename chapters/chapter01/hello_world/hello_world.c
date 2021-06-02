@@ -6,10 +6,10 @@
 static void greeting() {
 	// Print message and its address because it's cool!
 	char *message = "Hello, world!";
-	uprintf("[Addr: %p] %s\n", message, message);
+	printf("[Addr: %p] %s\n", message, message);
 }
 
-// define what happens when the module is loaded
+// Define what happens when the module is loaded
 static int
 load(struct module *module, int cmd, void *args)
 {
@@ -17,24 +17,23 @@ load(struct module *module, int cmd, void *args)
 
 	switch(cmd) {
 	case MOD_LOAD:
-		greeting(); // call custom function
+		greeting();
 		break;
 
 	case MOD_UNLOAD:
-		uprintf("Goodbye, cruel world...\n");
+		printf("Goodbye, cruel world...\n");
 		break;
 
 	default:
 		error = EOPNOTSUPP;
 		break;
-
 	}
 
 	return error;
 }
 
 static moduledata_t hello_mod = {
-	"hello",
+	"hello_world",
 	load,
 	NULL
 };
